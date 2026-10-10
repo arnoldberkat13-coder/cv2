@@ -1,32 +1,50 @@
+<video id="cam" autoplay playsinline></video> 
+<canvas id="frame" style="display:none;"></canvas>
+<button onclick='jalankanAmbilFoto();'>take photo</button>
 
-HTML: <video id="cam" autoplay></video> <canvas id="frame"></canvas>
-<button onclick='ambilFrame("cam", "frame");'> take photo</button>
 <script>
 mulaiKamera();
 
 async function mulaiKamera() {
     const video = document.getElementById('cam');
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
-    await video.play();
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        await video.play();
+    } catch (err) {
+        console.error("Gagal mengakses kamera: ", err);
+    }
     return video;
+}
+
+// Fungsi perantara untuk mengambil elemen berdasarkan ID-nya
+function jalankanAmbilFoto() {
+    const videoEl = document.getElementById('cam');
+    const canvasEl = document.getElementById('frame');
+    
+    const imageData = ambilFrame(videoEl, canvasEl);
+    const kecerahanRataRata = rataKecerahan(imageData);
+    
+    console.log("Rata-rata kecerahan citra:", kecerahanRataRata);
+    alert("Rata-rata kecerahan citra: " + kecerahanRataRata.toFixed(2));
 }
 
 function ambilFrame(video, canvas) {
     const ctx = canvas.getContext('2d');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
-// Hitung rata-rata kecerahan
+// Hitung rata-rata kecerahan (Grayscale / Nilai Intensitas)
 function rataKecerahan(imageData) {
     const d = imageData.data;
     let total = 0;
     for (let i = 0; i < d.length; i += 4) {
+        // Mengambil rata-rata dari kanal Merah, Hijau, dan Biru (RGB)
         total += (d[i] + d[i + 1] + d[i + 2]) / 3;
     }
     return total / (d.length / 4);
 }
-<script/>
+</script>
