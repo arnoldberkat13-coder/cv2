@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCV.js Object Detection & Image Processing</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        .mirror {
+            transform: scaleX(-1);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen flex flex-col">
+
+    <!-- Header Navbar -->
+    <header class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex flex-wrap justify-between items-center shadow-lg">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-eye text-indigo-500 text-2xl"></i>
+            <h1 class="text-xl font-bold tracking-wide text-white">VisionLab <span class="text-xs px-2 py-0.5 rounded bg-indigo-900 text-indigo-300 border border-indigo-700">OpenCV.js + Haar Cascade</span></h1>
+        </div>
+        <div class="flex items-center space-x-4 mt-2 sm:mt-0">
+            <div id="statusBadge" class="flex items-center space-x-2 bg-yellow-900/50 text-yellow-300 border border-yellow-700/50 px-3 py-1 rounded-full text-xs font-semibold">
+                <span class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+                <span id="statusText">Memuat OpenCV.js...</span>
+            </div>
+            <div class="bg-gray-700 text-gray-300 text-xs px-3 py-1 rounded-md flex items-center gap-2">
+                <i class="fa-solid fa-gauge-high text-emerald-400"></i>
+                <span>FPS: <strong id="fpsVal" class="text-emerald-400">0</strong></span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-7xl mx-auto w-full">
+        
+        <!-- Left Column: Display -->
+        <div class="lg:col-span-8 flex flex-col gap-4">
+            <div class="bg-gray-800 rounded-xl p-4 border border-gray-700 shadow-xl flex flex-col items-center justify-center relative min-h-[380px] overflow-hidden">
+                <video id="videoInput" class="hidden" playsinline></video>
+
+                <div class="relative w-full max-w-2xl aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center border border-gray-700">
+                    <canvas id="canvasOutput" class="w-full h-full object-contain mirror"></canvas>
+                    
+                    <div id="canvasOverlay" class="absolute inset-0 bg-gray-900/90 flex flex-col items-center justify-center gap-3 z-10 p-4 text-center">
+                        <i class="fa-solid fa-spinner animate-spin text-4xl text-indigo-500"></i>
+                        <p id="overlayMessage" class="text-sm font-medium text-gray-300">Menyiapkan webcam dan modul OpenCV...</p>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-wrap gap-3 justify-center w-full">
+                    <button id="toggleCamBtn" disabled class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition">
+                        <i class="fa-solid fa-video"></i> Mulai Kamera
+                    </button>
+                    <button id="toggleDetectionBtn" disabled class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition">
+                        <i class="fa-solid fa-user-check"></i> Deteksi Wajah
+                    </button>
+                    <button id="toggleMirrorBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition">
+                        <i class="fa-solid fa-arrows-left-right"></i> Flip Mirror
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-gray-800/80 rounded-xl p-4 border border-gray-700 text-xs text-gray-400 flex flex-wrap justify-between gap-2">
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle text-indigo-400 text-[8px]"></i> 1. Konversi Grayscale</span>
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle text-indigo-400 text-[8px]"></i> 2. Segmentasi Latar/Threshold</span>
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle text-indigo-400 text-[8px]"></i> 3. Operasi Morfologi</span>
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle text-emerald-400 text-[8px]"></i> 4. Deteksi Objek (Haar Cascade)</span>
+            </div>
+        </div>
+
+        <!-- Right Column: Controls -->
+        <div class="lg:col-span-4 flex flex-col gap-4">
+            <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-xl flex flex-col gap-5 h-full overflow-y-auto max-h-[750px]">
+                
+                <h2 class="text-base font-bold text-white flex items-center gap-2 border-b border-gray-700 pb-3">
+                    <i class="fa-solid fa-sliders text-indigo-400"></i> Kontrol Pengolahan Citra
+                </h2>
+
+                <div class="space-y-3">
+                    <label class="flex items-center justify-between cursor-pointer bg-gray-750 p-2.5 rounded-lg border border-gray-700 hover:bg-gray-700/50 transition">
+                        <span class="text-xs font-semibold text-gray-200">Aktifkan Thresholding</span>
+                        <input type="checkbox" id="enableThreshold" class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 bg-gray-900 border-gray-600">
+                    </label>
+
+                    <label class="flex items-center justify-between cursor-pointer bg-gray-750 p-2.5 rounded-lg border border-gray-700 hover:bg-gray-700/50 transition">
+                        <span class="text-xs font-semibold text-gray-200">Aktifkan Morfologi</span>
+                        <input type="checkbox" id="enableMorph" class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 bg-gray-900 border-gray-600">
+                    </label>
+
+                    <label class="flex items-center justify-between cursor-pointer bg-gray-750 p-2.5 rounded-lg border border-gray-700 hover:bg-gray-700/50 transition">
+                        <span class="text-xs font-semibold text-gray-200">Isolasi & Hapus Latar (Mask Object)</span>
+                        <input type="checkbox" id="applyMaskToColor" class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 bg-gray-900 border-gray-600">
+                    </label>
+
+                    <label class="flex items-center justify-between cursor-pointer bg-gray-750 p-2.5 rounded-lg border border-gray-700 hover:bg-gray-700/50 transition">
+                        <span class="text-xs font-semibold text-gray-200">Tampilkan Masker Biner Saja</span>
+                        <input type="checkbox" id="showMaskOnly" class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 bg-gray-900 border-gray-600">
+                    </label>
+                </div>
+
+                <!-- Threshold Settings -->
+                <div class="bg-gray-900/50 p-3.5 rounded-lg border border-gray-700/60 space-y-3">
+                    <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider block">1. Segmentasi Threshold</span>
+
+                    <div class="space-y-1">
+                        <label class="text-xs text-gray-300">Tipe Thresholding</label>
+                        <select id="threshType" class="w-full bg-gray-800 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-indigo-500">
+                            <option value="BINARY">Binary Standard</option>
+                            <option value="BINARY_INV">Binary Inverted (Objek Terang)</option>
+                            <option value="OTSU">Otsu Automatic Binarization</option>
+                            <option value="ADAPTIVE">Adaptive Gaussian Thresholding</option>
+                        </select>
+                    </div>
+
+                    <div id="threshValContainer" class="space-y-1">
+                        <div class="flex justify-between text-xs text-gray-400">
+                            <span>Nilai Ambang / Threshold Cutoff</span>
+                            <span id="threshValueLabel" class="text-indigo-300 font-mono">128</span>
+                        </div>
+                        <input type="range" id="threshValue" min="0" max="255" value="128" class="w-full accent-indigo-500 bg-gray-700 h-1.5 rounded-lg cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- Morphological Settings -->
+                <div class="bg-gray-900/50 p-3.5 rounded-lg border border-gray-700/60 space-y-3">
+                    <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider block">2. Pembersihan Morfologi</span>
+                    
+                    <div class="space-y-1">
+                        <label class="text-xs text-gray-300">Tipe Operasi</label>
+                        <select id="morphOp" class="w-full bg-gray-800 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-indigo-500">
+                            <option value="MORPH_OPEN">Opening (Pembersihan Noise Latar)</option>
+                            <option value="MORPH_CLOSE">Closing (Menutup Lubang Objek)</option>
+                            <option value="MORPH_ERODE">Erosion (Pengikisan Tepi)</option>
+                            <option value="MORPH_DILATE">Dilation (Penebalan Objek)</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs text-gray-400">
+                            <span>Ukuran Kernel (Struktur)</span>
+                            <span id="kernelSizeLabel" class="text-indigo-300 font-mono">3x3</span>
+                        </div>
+                        <input type="range" id="kernelSize" min="3" max="15" step="2" value="3" class="w-full accent-indigo-500 bg-gray-700 h-1.5 rounded-lg cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- Haar Cascade Settings -->
+                <div class="bg-gray-900/50 p-3.5 rounded-lg border border-gray-700/60 space-y-3">
+                    <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider block">3. Parameter Haar Classifier</span>
+
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs text-gray-400">
+                            <span>Scale Factor</span>
+                            <span id="scaleFactorLabel" class="text-emerald-300 font-mono">1.10</span>
+                        </div>
+                        <input type="range" id="scaleFactor" min="1.05" max="1.5" step="0.05" value="1.10" class="w-full accent-emerald-500 bg-gray-700 h-1.5 rounded-lg cursor-pointer">
+                    </div>
+
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs text-gray-400">
+                            <span>Min Neighbors</span>
+                            <span id="minNeighborsLabel" class="text-emerald-300 font-mono">3</span>
+                        </div>
+                        <input type="range" id="minNeighbors" min="1" max="10" step="1" value="3" class="w-full accent-emerald-500 bg-gray-700 h-1.5 rounded-lg cursor-pointer">
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 border-t border-gray-700 py-3 text-center text-xs text-gray-400 mt-auto">
+        Single-File OpenCV.js Computer Vision Pipeline &bull; HTML5 & WebRTC
+    </footer>
+
+    <!-- Async Load OpenCV.js -->
+    <script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="onOpenCvReady();" onerror="onOpenCvError();"></script>
+
+    <script>
+        let video = document.getElementById('videoInput');
+        let canvas = document.getElementById('canvasOutput');
+        let ctx = canvas.getContext('2d');
+        
+        let isCameraActive = false;
+        let isDetectionEnabled = true;
+        let isMirrored = true;
+        let classifier = null;
+        let animFrameId = null;
+
+        // Matrices OpenCV
+        let cap = null;
+        let src = null;
+        let gray = null;
+        let processedMat = null;
+        let maskedSrc = null;
+        let faces = null;
+
+        // FPS Tracker
+        let lastFrameTime = performance.now();
+        let frameCount = 0;
+
+        const HAAR_CASCADE_URL = 'https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml';
+        const HAAR_CASCADE_FILENAME = 'haarcascade_frontalface_default.xml';
+
+        function onOpenCvReady() {
+            document.getElementById('statusText').innerText = 'Mengunduh Model Haar Cascade...';
+            downloadCascadeModel(HAAR_CASCADE_URL, HAAR_CASCADE_FILENAME, () => {
+                try {
+                    classifier = new cv.CascadeClassifier();
+                    classifier.load(HAAR_CASCADE_FILENAME);
+
+                    document.getElementById('statusBadge').className = 'flex items-center space-x-2 bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 px-3 py-1 rounded-full text-xs font-semibold';
+                    document.getElementById('statusBadge').children[0].className = 'w-2 h-2 rounded-full bg-emerald-400';
+                    document.getElementById('statusText').innerText = 'Sistem Siap';
+                    
+                    document.getElementById('canvasOverlay').classList.add('hidden');
+                    document.getElementById('toggleCamBtn').disabled = false;
+                    document.getElementById('toggleDetectionBtn').disabled = false;
+                } catch (err) {
+                    showError('Gagal inisialisasi Cascade Classifier: ' + err);
+                }
+            });
+        }
+
+        function onOpenCvError() {
+            showError('Gagal memuat OpenCV.js. Periksa koneksi internet Anda.');
+        }
+
+        function downloadCascadeModel(url, fileName, callback) {
+            let request = new XMLHttpRequest();
+            request.open('GET', url, true);
+            request.responseType = 'arraybuffer';
+            request.onload = function() {
+                if (request.status === 200) {
+                    let data = new Uint8Array(request.response);
+                    cv.FS_createDataFile('/', fileName, data, true, false, false);
+                    callback();
+                } else {
+                    showError('Gagal mengunduh file XML cascade (HTTP ' + request.status + ')');
+                }
+            };
+            request.onerror = function() {
+                showError('Terjadi kesalahan jaringan saat mengunduh model.');
+            };
+            request.send();
+        }
+
+        function showError(msg) {
+            const overlay = document.getElementById('canvasOverlay');
+            overlay.classList.remove('hidden');
+            document.getElementById('overlayMessage').innerText = msg;
+            document.getElementById('statusText').innerText = 'Error';
+            document.getElementById('statusBadge').className = 'flex items-center space-x-2 bg-rose-900/50 text-rose-300 border border-rose-700/50 px-3 py-1 rounded-full text-xs font-semibold';
+        }
+
+        // Event Listeners
+        document.getElementById('threshValue').addEventListener('input', (e) => {
+            document.getElementById('threshValueLabel').innerText = e.target.value;
+        });
+
+        document.getElementById('kernelSize').addEventListener('input', (e) => {
+            document.getElementById('kernelSizeLabel').innerText = `${e.target.value}x${e.target.value}`;
+        });
+
+        document.getElementById('scaleFactor').addEventListener('input', (e) => {
+            document.getElementById('scaleFactorLabel').innerText = parseFloat(e.target.value).toFixed(2);
+        });
+
+        document.getElementById('minNeighbors').addEventListener('input', (e) => {
+            document.getElementById('minNeighborsLabel').innerText = e.target.value;
+        });
+
+        document.getElementById('threshType').addEventListener('change', (e) => {
+            const isAuto = e.target.value === 'OTSU' || e.target.value === 'ADAPTIVE';
+            document.getElementById('threshValContainer').style.opacity = isAuto ? '0.4' : '1';
+        });
+
+        document.getElementById('toggleMirrorBtn').addEventListener('click', () => {
+            isMirrored = !isMirrored;
+            if (isMirrored) {
+                canvas.classList.add('mirror');
+            } else {
+                canvas.classList.remove('mirror');
+            }
+        });
+
+        document.getElementById('toggleCamBtn').addEventListener('click', async () => {
+            if (!isCameraActive) {
+                await startCamera();
+            } else {
+                stopCamera();
+            }
+        });
+
+        document.getElementById('toggleDetectionBtn').addEventListener('click', () => {
+            isDetectionEnabled = !isDetectionEnabled;
+            const btn = document.getElementById('toggleDetectionBtn');
+            if (isDetectionEnabled) {
+                btn.className = 'bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition';
+                btn.innerHTML = '<i class="fa-solid fa-user-check"></i> Deteksi Wajah';
+            } else {
+                btn.className = 'bg-gray-700 hover:bg-gray-600 text-gray-300 px-5 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition';
+                btn.innerHTML = '<i class="fa-solid fa-user-slash"></i> Deteksi Wajah';
+            }
+        });
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+                    audio: false
+                });
+                video.srcObject = stream;
+                await video.play();
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // Inisialisasi Matriks OpenCV
+                src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+                gray = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC1);
+                processedMat = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC1);
+                maskedSrc = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+                faces = new cv.RectVector();
+                cap = new cv.VideoCapture(video);
+
+                isCameraActive = true;
+                document.getElementById('toggleCamBtn').innerHTML = '<i class="fa-solid fa-video-slash"></i> Hentikan Kamera';
+                document.getElementById('toggleCamBtn').className = 'bg-rose-600 hover:bg-rose-500 text-white px-5 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition';
+
+                animFrameId = requestAnimationFrame(processVideoFrame);
+            } catch (err) {
+                showError('Gagal mengakses kamera: ' + err.message);
+            }
+        }
+
+        function stopCamera() {
+            isCameraActive = false;
+            if (animFrameId) cancelAnimationFrame(animFrameId);
+
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+
+            // Clean-up OpenCV Matrices
+            if (src) { src.delete(); src = null; }
+            if (gray) { gray.delete(); gray = null; }
+            if (processedMat) { processedMat.delete(); processedMat = null; }
+            if (maskedSrc) { maskedSrc.delete(); maskedSrc = null; }
+            if (faces) { faces.delete(); faces = null; }
+
+            document.getElementById('toggleCamBtn').innerHTML = '<i class="fa-solid fa-video"></i> Mulai Kamera';
+            document.getElementById('toggleCamBtn').className = 'bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition';
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('fpsVal').innerText = '0';
+        }
+
+        // Loop Pengolahan Utama
+        function processVideoFrame() {
+            if (!isCameraActive) return;
+
+            // Perhitungan FPS
+            const now = performance.now();
+            frameCount++;
+            if (now - lastFrameTime >= 1000) {
+                document.getElementById('fpsVal').innerText = frameCount;
+                frameCount = 0;
+                lastFrameTime = now;
+            }
+
+            try {
+                // 1. Baca Frame Sumber
+                cap.read(src);
+
+                // 2. Konversi ke Grayscale
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+                gray.copyTo(processedMat);
+
+                // 3. Segmentasi / Thresholding (Pemisah Objek & Latar)
+                const enableThresh = document.getElementById('enableThreshold').checked;
+                if (enableThresh) {
+                    const threshTypeStr = document.getElementById('threshType').value;
+                    const threshVal = parseFloat(document.getElementById('threshValue').value);
+                    
+                    if (threshTypeStr === 'BINARY') {
+                        cv.threshold(processedMat, processedMat, threshVal, 255, cv.THRESH_BINARY);
+                    } else if (threshTypeStr === 'BINARY_INV') {
+                        cv.threshold(processedMat, processedMat, threshVal, 255, cv.THRESH_BINARY_INV);
+                    } else if (threshTypeStr === 'OTSU') {
+                        cv.threshold(processedMat, processedMat, threshVal, 255, cv.THRESH_BINARY | cv.THRESH_OTSU);
+                    } else if (threshTypeStr === 'ADAPTIVE') {
+                        cv.adaptiveThreshold(processedMat, processedMat, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+                    }
+                }
+
+                // 4. Morfologi Pembersihan Latar / Objek
+                const enableMorph = document.getElementById('enableMorph').checked;
+                if (enableMorph) {
+                    const morphOpType = document.getElementById('morphOp').value;
+                    const kSize = parseInt(document.getElementById('kernelSize').value);
+                    
+                    let M = cv.Mat.ones(kSize, kSize, cv.CV_8U);
+                    let anchor = new cv.Point(-1, -1);
+
+                    if (morphOpType === 'MORPH_ERODE') {
+                        cv.erode(processedMat, processedMat, M, anchor, 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+                    } else if (morphOpType === 'MORPH_DILATE') {
+                        cv.dilate(processedMat, processedMat, M, anchor, 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+                    } else if (morphOpType === 'MORPH_OPEN') {
+                        cv.morphologyEx(processedMat, processedMat, cv.MORPH_OPEN, M);
+                    } else if (morphOpType === 'MORPH_CLOSE') {
+                        cv.morphologyEx(processedMat, processedMat, cv.MORPH_CLOSE, M);
+                    }
+                    M.delete();
+                }
+
+                // 5. Opsi Tampilan & Masking Pemisahan Latar Belakang
+                const showMaskOnly = document.getElementById('showMaskOnly').checked;
+                const applyMaskToColor = document.getElementById('applyMaskToColor').checked;
+
+                if (showMaskOnly) {
+                    // Tampilkan hanya hitam-putih biner
+                    cv.imshow('canvasOutput', processedMat);
+                } else if (applyMaskToColor && enableThresh) {
+                    // Terapkan threshold untuk menghapus latar belakang dari citra berwarna
+                    maskedSrc.setTo(new cv.Scalar(0, 0, 0, 255)); // Isikan latar hitam
+                    src.copyTo(maskedSrc, processedMat); // Hanya salin area piksel objek putih
+                    cv.imshow('canvasOutput', maskedSrc);
+                } else {
+                    // Tampilkan citra normal
+                    cv.imshow('canvasOutput', src);
+                }
+
+                // 6. Deteksi Objek (Haar Cascade Classifier)
+                if (isDetectionEnabled && classifier && !classifier.empty()) {
+                    const scaleFactor = parseFloat(document.getElementById('scaleFactor').value);
+                    const minNeighbors = parseInt(document.getElementById('minNeighbors').value);
+                    
+                    let detectTargetMat = (enableThresh || enableMorph) ? processedMat : gray;
+                    classifier.detectMultiScale(detectTargetMat, faces, scaleFactor, minNeighbors, 0, new cv.Size(30, 30));
+
+                    // Gambar Bounding Box
+                    for (let i = 0; i < faces.size(); ++i) {
+                        let face = faces.get(i);
+                        
+                        ctx.strokeStyle = '#10B981';
+                        ctx.lineWidth = 3;
+                        ctx.strokeRect(face.x, face.y, face.width, face.height);
+
+                        ctx.fillStyle = '#10B981';
+                        ctx.fillRect(face.x, face.y > 22 ? face.y - 22 : face.y, 95, 20);
+                        
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.font = 'bold 12px sans-serif';
+                        ctx.fillText('Wajah Terdeteksi', face.x + 4, face.y > 22 ? face.y - 7 : face.y + 14);
+                    }
+                }
+
+            } catch (err) {
+                console.error("Kesalahan pemrosesan frame: ", err);
+            }
+
+            animFrameId = requestAnimationFrame(processVideoFrame);
+        }
+    </script>
+</body>
+</html>
